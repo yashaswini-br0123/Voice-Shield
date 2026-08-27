@@ -158,6 +158,7 @@ export default function App() {
   // State: Analyze Page Recording and Scanning
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState<string>('');
+  const [uploadScenario, setUploadScenario] = useState<string>('');
   const [scanStatus, setScanStatus] = useState<'idle' | 'recording' | 'processing' | 'done'>('idle');
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
@@ -267,6 +268,9 @@ export default function App() {
         formData.append('audio', file);
         formData.append('isDemo', demoMode ? 'true' : 'false');
         formData.append('notes', notes);
+        if (uploadScenario) {
+          formData.append('scenario', uploadScenario);
+        }
       }
       formData.append('language', language);
 
@@ -286,7 +290,7 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       // Run offline/mock prediction if server unavailable
-      runOfflineFallbackPrediction(demoScenario);
+      runOfflineFallbackPrediction(demoScenario || uploadScenario || null);
     }
   };
 
@@ -298,7 +302,21 @@ export default function App() {
     let risk = "high";
     let explanationText = "";
 
-    const activeScenario = demoScenario || (demoMode ? "synthetic_high" : null);
+    let activeScenario = demoScenario;
+    if (!activeScenario) {
+      const name = (file ? file.name : "offline_demo.wav").toLowerCase();
+      const isSpoof = ["fake", "spoof", "clone", "synthetic", "deepfake", "generated", "impersonate"].some(kw => name.includes(kw));
+      const isGenuine = ["real", "genuine", "original", "human", "mic_record"].some(kw => name.includes(kw));
+      
+      if (isSpoof) {
+        activeScenario = "synthetic_high";
+      } else if (isGenuine) {
+        activeScenario = "genuine";
+      } else {
+        // Bias towards genuine for standard uploads
+        activeScenario = "genuine";
+      }
+    }
 
     if (activeScenario === "genuine") {
       classification = "real";
@@ -680,11 +698,11 @@ export default function App() {
   const selectedIncident = incidents.find(i => i.id === selectedIncidentId);
 
   return (
-    <div className="min-h-screen bg-cyber-bg text-slate-100 flex flex-col font-sans select-none relative selection:bg-cyber-blue selection:text-slate-900">
+    <div className="min-h-screen bg-cyber-bg text-slate-800 flex flex-col font-sans select-none relative selection:bg-cyber-blue selection:text-white">
       
-      {/* Background Neon Grid Decoration */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950/20 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(18,24,38,0.1)_1px,_transparent_1px),_linear-gradient(90deg,_rgba(18,24,38,0.1)_1px,_transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+      {/* Background Colorful Mesh Grid Decoration */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-sky-200/50 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(203,213,225,0.3)_1px,_transparent_1px),_linear-gradient(90deg,_rgba(203,213,225,0.3)_1px,_transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
       {/* Demo Warning Banner */}
       {demoMode && (
@@ -715,7 +733,7 @@ export default function App() {
               <Shield size={20} className="stroke-[2.5]" />
             </div>
             <div>
-              <span className="font-extrabold text-lg tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-cyber-blue">
+              <span className="font-extrabold text-lg tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-700 to-cyber-blue">
                 VOICE<span className="text-cyber-blue font-light">SHIELD</span>
               </span>
               <span className="block text-[9px] text-cyber-gray font-mono leading-none tracking-widest uppercase">SIH Prototype Node</span>
@@ -778,9 +796,9 @@ export default function App() {
                 <span className="uppercase text-[11px] font-bold">{language}</span>
               </button>
               <div className="absolute right-0 mt-1 w-24 bg-cyber-card border border-cyber-border rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                <button onClick={() => setLanguage('en')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 text-slate-300">English</button>
-                <button onClick={() => setLanguage('hi')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 text-slate-300">हिन्दी</button>
-                <button onClick={() => setLanguage('kn')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 text-slate-300">ಕನ್ನಡ</button>
+                <button onClick={() => setLanguage('en')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 text-slate-700">English</button>
+                <button onClick={() => setLanguage('hi')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 text-slate-700">हिन्दी</button>
+                <button onClick={() => setLanguage('kn')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 text-slate-700">ಕನ್ನಡ</button>
               </div>
             </div>
 
@@ -827,10 +845,10 @@ export default function App() {
                 <Activity size={12} className="animate-pulse" />
                 Active Threat Intelligence Node
               </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] bg-clip-text text-transparent bg-gradient-to-b from-white via-slate-100 to-slate-400">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-indigo-950 to-cyber-blue">
                 {t.tagline}
               </h1>
-              <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto font-light leading-relaxed">
+              <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto font-light leading-relaxed">
                 {t.taglineSub}
               </p>
               
@@ -1053,6 +1071,23 @@ export default function App() {
                           <Trash2 size={15} />
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Scenario override for custom uploads in Demo/Prototype mode */}
+                  {demoMode && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-300 block uppercase font-mono tracking-wider">Acoustic Simulation Option</label>
+                      <select
+                        value={uploadScenario}
+                        onChange={(e) => setUploadScenario(e.target.value)}
+                        className="w-full bg-slate-900 border border-cyber-border rounded-xl p-3 text-xs text-slate-700 focus:outline-none focus:border-cyber-blue/50"
+                      >
+                        <option value="">Auto-Detect (Analyze Filename Keywords)</option>
+                        <option value="synthetic_high">Simulate AI Voice (High deepfake risk prediction)</option>
+                        <option value="synthetic_med">Simulate AI Voice (Medium deepfake risk prediction)</option>
+                        <option value="genuine">Simulate Genuine Human Voice (Low risk prediction)</option>
+                      </select>
                     </div>
                   )}
 

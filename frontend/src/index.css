@@ -6,48 +6,51 @@
 
 @layer base {
   body {
-    @apply bg-cyber-bg text-slate-100 font-sans antialiased selection:bg-cyber-blue selection:text-slate-900 overflow-x-hidden;
+    @apply bg-cyber-bg text-slate-800 font-sans antialiased selection:bg-cyber-blue selection:text-white overflow-x-hidden;
   }
 }
 
-/* Custom Scrollbar */
+/* Custom Light Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #030712;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #38bdf8;
+  background: #0284c7;
 }
 
-/* Keyframes for soft background pulses */
+/* Keyframes for soft colorful background pulses */
 @keyframes cyber-pulse {
   0%, 100% {
-    opacity: 0.15;
+    opacity: 0.2;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.3;
+    opacity: 0.35;
+    transform: scale(1.05);
   }
 }
 
 .animate-cyber-pulse {
-  animation: cyber-pulse 8s infinite ease-in-out;
+  animation: cyber-pulse 10s infinite ease-in-out;
 }
 
-/* Glassmorphism utility */
+/* Light Glassmorphism Panel */
 .glass-panel {
-  background: rgba(11, 15, 25, 0.7);
+  background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05) !important;
 }
 
 .glass-panel-hover {
@@ -55,7 +58,65 @@
 }
 
 .glass-panel-hover:hover {
-  border-color: rgba(56, 189, 248, 0.3);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.1);
+  border-color: rgba(2, 132, 199, 0.3) !important;
+  box-shadow: 0 10px 25px rgba(2, 132, 199, 0.08) !important;
   transform: translateY(-2px);
+}
+
+/* Light Theme Color Utility Mapping Overrides */
+@layer utilities {
+  .text-slate-100 {
+    color: #0f172a !important; /* Slate-900 (Main Title/Header) */
+  }
+  .text-slate-200 {
+    color: #1e293b !important; /* Slate-800 (Card titles, bold elements) */
+  }
+  .text-slate-300 {
+    color: #334155 !important; /* Slate-700 (Body text) */
+  }
+  .text-slate-400 {
+    color: #475569 !important; /* Slate-600 (Secondary label text) */
+  }
+  
+  /* Background conversions */
+  .bg-slate-900 {
+    background-color: #f8fafc !important; /* Light slate bg */
+    color: #1e293b !important;
+  }
+  .bg-slate-950 {
+    background-color: #f1f5f9 !important; /* Light border grey/shaded bg */
+  }
+  
+  /* Border overrides */
+  .border-cyber-border {
+    border-color: #e2e8f0 !important;
+  }
+  
+  /* Force dark buttons styling to remain colourful */
+  .bg-cyber-blue\/10 {
+    background-color: rgba(2, 132, 199, 0.08) !important;
+  }
+  .border-cyber-blue\/20 {
+    border-color: rgba(2, 132, 199, 0.15) !important;
+  }
+  .text-cyber-blue {
+    color: #0284c7 !important;
+  }
+  
+  /* Warning structures styling */
+  .bg-red-950\/80 {
+    background-color: rgba(254, 226, 226, 0.9) !important;
+    border-color: rgba(248, 113, 113, 0.4) !important;
+    color: #991b1b !important;
+  }
+  
+  .bg-amber-500\/10 {
+    background-color: rgba(251, 191, 36, 0.08) !important;
+    border-color: rgba(251, 191, 36, 0.25) !important;
+    color: #92400e !important;
+  }
+
+  .text-amber-200 {
+    color: #92400e !important;
+  }
 }

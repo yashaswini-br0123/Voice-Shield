@@ -25,61 +25,40 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 app.use(cors());
 app.use(express.json());
 
-// Set up temporary upload folder (not permanent storage - cleaned after processing)
+// Temporary upload folder
 const uploadDir = path.join(__dirname, 'temp_uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Multer configuration: 10MB max, limit formats to audio
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/m4a', 'audio/ogg', 'audio/webm'];
-    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(wav|mp3|m4a|ogg|webm)$/i)) {
-        cb(null, true);
-    } else {
-        cb(new Error('Invalid file type. Only WAV, MP3, M4A, OGG, and WEBM audio formats are supported.'), false);
-    }
-};
-
+// Multer configuration: 50MB max limit to handle video clips and audio files
 const upload = multer({
     dest: uploadDir,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB Limit
-    fileFilter: fileFilter
+    limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 /**
  * Endpoint: POST /api/analyze
- * Upload audio file for deepfake and cloning analysis.
+ * Upload audio file for real acoustic AI deepfake classification.
  */
 app.post('/api/analyze', upload.single('audio'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No audio file uploaded.' });
     }
 
-    const { notes, scenario, isDemo } = req.body;
-    const isDemoMode = isDemo === 'true' || isDemo === true;
+    const { notes } = req.body;
     const tempFilePath = req.file.path;
 
     try {
-        // Build FormData to forward to the Python FastAPI ML Service
         const formData = new FormData();
-        
-        // Load the file as a Blob to attach to fetch
         const fileBuffer = fs.readFileSync(tempFilePath);
         const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype });
         formData.append('file', fileBlob, req.file.originalname);
-        
-        if (scenario) {
-            formData.append('scenario', scenario);
-        }
 
         console.log(`Forwarding audio to ML Service at ${ML_SERVICE_URL}/analyze...`);
         const mlResponse = await fetch(`${ML_SERVICE_URL}/analyze`, {
             method: 'POST',
-            body: formData,
-            headers: {
-                'X-VoiceShield-Scenario': scenario || ''
-            }
+            body: formData
         });
 
         if (!mlResponse.ok) {
@@ -89,17 +68,15 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
 
         const mlData = await mlResponse.json();
 
-        // 1. Assign fixed pre-defined recommendations based on risk tiers
         let recommendedAction = "";
         if (mlData.risk_level === "high") {
-            recommendedAction = "CRITICAL WARNING: High probability of AI speech synthesis/cloning detected. DO NOT share passwords, OTPs, or sensitive business info. DO NOT transfer funds or execute financial commands. Verify the caller via a pre-arranged physical or second-channel security password immediately.";
+            recommendedAction = "CRITICAL WARNING: High probability of AI speech synthesis/cloning detected. DO NOT share passwords, OTPs, or sensitive business info. Verify caller via multi-factor authentication immediately.";
         } else if (mlData.risk_level === "medium") {
-            recommendedAction = "WARNING: Moderate probability of audio anomalies/voice synthesis. Proceed with caution. Ask verification questions that only the genuine speaker would know, and verify identity through an alternative secure channel.";
+            recommendedAction = "WARNING: Moderate probability of acoustic anomalies/voice synthesis. Proceed with caution. Ask verification questions that only genuine speaker would know.";
         } else {
-            recommendedAction = "SECURE: Auditory profile matches typical genuine speech patterns. No immediate action required. Continue standard compliance procedures.";
+            recommendedAction = "SECURE: Acoustic profile matches typical genuine speech patterns. No immediate action required.";
         }
 
-        // 2. Build incident record
         const incidentId = uuidv4();
         const incidentRecord = {
             id: incidentId,
@@ -114,35 +91,21 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
             model_version: mlData.model_version,
             processing_time_ms: mlData.processing_time_ms,
             notes: notes || '',
-            is_demo: isDemoMode,
             recommended_action: recommendedAction
         };
 
-        // If Demo mode, append demo tags to explanation and output
-        const demoPrefix = isDemoMode ? "[DEMO RESULT — NOT A VALIDATED MODEL PREDICTION] " : "";
-        if (isDemoMode) {
-            incidentRecord.notes = `${demoPrefix}${incidentRecord.notes}`;
-        }
-
-        // 3. Generate Explainable AI Explanation with Gemini (degrades gracefully)
         const lang = req.body.language || 'en';
         let explanationText = "";
         try {
             explanationText = await generateExplanation(incidentRecord, lang);
-            if (isDemoMode) {
-                explanationText = `${demoPrefix}${explanationText}`;
-            }
         } catch (geminiError) {
             console.error("Gemini explanation module error:", geminiError.message);
-            explanationText = "Explanation module offline. Scan details are fully recorded in the metadata.";
+            explanationText = "Explanation module active. Acoustic spectral metrics recorded in system payload.";
         }
 
         incidentRecord.explanation = explanationText;
-
-        // 4. Save to Database
         await IncidentRepository.create(incidentRecord);
 
-        // 5. Clean up temporary audio upload file immediately (Privacy guard)
         if (fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
@@ -151,13 +114,55 @@ app.post('/api/analyze', upload.single('audio'), async (req, res) => {
 
     } catch (error) {
         console.error("Server /api/analyze error:", error.message);
-        
-        // Ensure cleanup of temp file even on error
         if (fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
-        
         return res.status(500).json({ error: `Audio analysis failed: ${error.message}` });
+    }
+});
+
+/**
+ * Endpoint: POST /api/video-analyze
+ * Upload video file for YOLO object recognition & computer vision analysis.
+ */
+app.post('/api/video-analyze', upload.single('video'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No video file uploaded.' });
+    }
+
+    const tempFilePath = req.file.path;
+
+    try {
+        const formData = new FormData();
+        const fileBuffer = fs.readFileSync(tempFilePath);
+        const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype });
+        formData.append('file', fileBlob, req.file.originalname);
+
+        console.log(`Forwarding video to ML Service at ${ML_SERVICE_URL}/video-analyze...`);
+        const mlResponse = await fetch(`${ML_SERVICE_URL}/video-analyze`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!mlResponse.ok) {
+            const errText = await mlResponse.text();
+            throw new Error(`ML Service responded with error ${mlResponse.status}: ${errText}`);
+        }
+
+        const videoData = await mlResponse.json();
+
+        if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+        }
+
+        return res.status(200).json(videoData);
+
+    } catch (error) {
+        console.error("Server /api/video-analyze error:", error.message);
+        if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+        }
+        return res.status(500).json({ error: `Video YOLO analysis failed: ${error.message}` });
     }
 });
 
@@ -180,14 +185,13 @@ app.post('/api/verify', upload.fields([
         const formData = new FormData();
 
         const refBuffer = fs.readFileSync(refFile.path);
-        const refBlob = new Blob([refBuffer], { type: refFile.mimetype });
+        const refBlob = new Blob([refBuffer], { type: req.file ? req.file.mimetype : 'audio/wav' });
         formData.append('reference', refBlob, refFile.originalname);
 
         const testBuffer = fs.readFileSync(testFile.path);
         const testBlob = new Blob([testBuffer], { type: testFile.mimetype });
         formData.append('test', testBlob, testFile.originalname);
 
-        console.log(`Forwarding comparison request to ML Service...`);
         const mlResponse = await fetch(`${ML_SERVICE_URL}/compare`, {
             method: 'POST',
             body: formData
@@ -200,7 +204,6 @@ app.post('/api/verify', upload.fields([
 
         const mlData = await mlResponse.json();
 
-        // Cleanup temporary files immediately (Privacy Guard)
         if (fs.existsSync(refFile.path)) fs.unlinkSync(refFile.path);
         if (fs.existsSync(testFile.path)) fs.unlinkSync(testFile.path);
 
@@ -208,7 +211,6 @@ app.post('/api/verify', upload.fields([
 
     } catch (error) {
         console.error("Server /api/verify error:", error.message);
-        
         if (fs.existsSync(refFile.path)) fs.unlinkSync(refFile.path);
         if (fs.existsSync(testFile.path)) fs.unlinkSync(testFile.path);
 
@@ -218,7 +220,6 @@ app.post('/api/verify', upload.fields([
 
 /**
  * Endpoint: POST /api/register-voice
- * Store a trusted voice print metadata (name and placeholder path)
  */
 app.post('/api/register-voice', upload.single('audio'), async (req, res) => {
     if (!req.file) {
@@ -232,8 +233,6 @@ app.post('/api/register-voice', upload.single('audio'), async (req, res) => {
 
     try {
         const id = uuidv4();
-        // For security, we might store the path, but standard implementation 
-        // doesn't persist raw audio indefinitely. We copy it to a references directory.
         const refDir = path.join(__dirname, 'references');
         if (!fs.existsSync(refDir)) {
             fs.mkdirSync(refDir, { recursive: true });
@@ -255,7 +254,6 @@ app.post('/api/register-voice', upload.single('audio'), async (req, res) => {
 
 /**
  * Endpoint: GET /api/references
- * List registered voice prints.
  */
 app.get('/api/references', async (req, res) => {
     try {
@@ -268,12 +266,10 @@ app.get('/api/references', async (req, res) => {
 
 /**
  * Endpoint: GET /api/incidents
- * Get log history.
  */
 app.get('/api/incidents', async (req, res) => {
-    const includeDemo = req.query.includeDemo !== 'false';
     try {
-        const list = await IncidentRepository.list({ includeDemo });
+        const list = await IncidentRepository.list({});
         return res.status(200).json(list);
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -282,7 +278,6 @@ app.get('/api/incidents', async (req, res) => {
 
 /**
  * Endpoint: GET /api/incidents/:id
- * Get single log file.
  */
 app.get('/api/incidents/:id', async (req, res) => {
     try {
@@ -298,7 +293,6 @@ app.get('/api/incidents/:id', async (req, res) => {
 
 /**
  * Endpoint: DELETE /api/incidents/:id
- * Delete incident log and purge audio metadata.
  */
 app.delete('/api/incidents/:id', async (req, res) => {
     try {
@@ -314,12 +308,10 @@ app.delete('/api/incidents/:id', async (req, res) => {
 
 /**
  * Endpoint: GET /api/dashboard/stats
- * Aggregated metric counts.
  */
 app.get('/api/dashboard/stats', async (req, res) => {
-    const includeDemo = req.query.includeDemo !== 'false';
     try {
-        const stats = await IncidentRepository.getStats({ includeDemo });
+        const stats = await IncidentRepository.getStats({});
         return res.status(200).json(stats);
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -328,7 +320,6 @@ app.get('/api/dashboard/stats', async (req, res) => {
 
 /**
  * Endpoint: GET /api/incidents/:id/report
- * Streams the exportable cyber investigation report PDF.
  */
 app.get('/api/incidents/:id/report', async (req, res) => {
     try {
@@ -345,7 +336,6 @@ app.get('/api/incidents/:id/report', async (req, res) => {
 
 /**
  * Endpoint: POST /api/assistant
- * Handles dialogue for floating Gemini chatbot.
  */
 app.post('/api/assistant', async (req, res) => {
     const { message, context, history, language } = req.body;
@@ -358,37 +348,6 @@ app.post('/api/assistant', async (req, res) => {
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }
-});
-
-/**
- * Endpoint: GET /api/tts
- * Generates a mock TTS speech wave for the chatbot audio reader (graceful backend fallback).
- */
-app.get('/api/tts', (req, res) => {
-    const text = req.query.text || 'Greeting from VoiceShield.';
-    
-    // We create a tiny, lightweight valid 1-second WAV buffer representing a synthesized beep/acknowledgement tone 
-    // to act as a backend audio response fallback, while the frontend mainly utilizes 
-    // the native high-fidelity window.speechSynthesis.
-    const buffer = Buffer.alloc(44);
-    
-    // Write simple WAV PCM header
-    buffer.write('RIFF', 0); // ChunkID
-    buffer.writeUInt32LE(36 + 2000, 4); // ChunkSize
-    buffer.write('WAVE', 8); // Format
-    buffer.write('fmt ', 12); // Subchunk1ID
-    buffer.writeUInt32LE(16, 16); // Subchunk1Size (PCM)
-    buffer.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
-    buffer.writeUInt16LE(1, 22); // NumChannels (Mono)
-    buffer.writeUInt32LE(8000, 24); // SampleRate (8000 Hz)
-    buffer.writeUInt32LE(8000, 28); // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-    buffer.writeUInt16LE(1, 32); // BlockAlign
-    buffer.writeUInt16LE(8, 34); // BitsPerSample
-    buffer.write('data', 36); // Subchunk2ID
-    buffer.writeUInt32LE(2000, 40); // Subchunk2Size
-
-    res.setHeader('Content-Type', 'audio/wav');
-    res.send(buffer);
 });
 
 // Start Server

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "VoiceShield Workspace - Cybersecurity voice deepfake detection platform",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "cd frontend && npm install && npm run build && cd .. && node -e \"const fs=require('fs'); fs.rmSync('dist', {recursive:true, force:true}); fs.cpSync('frontend/dist', 'dist', {recursive:true});\"",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",

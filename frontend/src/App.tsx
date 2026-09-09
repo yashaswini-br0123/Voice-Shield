@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Shield, Upload, Mic, RefreshCw, 
   MessageSquare, Globe, BarChart3, 
@@ -16,6 +16,11 @@ export default function App() {
   // Global State
   const [stats, setStats] = useState<any>(null);
   const [incidents, setIncidents] = useState<any[]>([]);
+
+  // Drag & Drop States
+  const [isDragOverAudio, setIsDragOverAudio] = useState<boolean>(false);
+  const [isDragOverImage, setIsDragOverImage] = useState<boolean>(false);
+  const [isDragOverVideo, setIsDragOverVideo] = useState<boolean>(false);
 
   // 1. Voice Recognition State
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -107,19 +112,28 @@ export default function App() {
     fetchData();
   }, [currentPage]);
 
-  // Audio Handlers
-  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setAudioFile(file);
-      setAudioUrl(URL.createObjectURL(file));
-      setAudioResult(null);
-    }
+  // File Select & Drag-and-Drop Handlers
+  const processAudioFile = (file: File) => {
+    setAudioFile(file);
+    setAudioUrl(URL.createObjectURL(file));
+    setAudioResult(null);
+  };
+
+  const processImageFile = (file: File) => {
+    setImageFile(file);
+    setImageUrl(URL.createObjectURL(file));
+    setImageResult(null);
+  };
+
+  const processVideoFile = (file: File) => {
+    setVideoFile(file);
+    setVideoUrl(URL.createObjectURL(file));
+    setVideoResult(null);
   };
 
   const runAudioAnalysis = async () => {
     if (!audioFile && !audioUrl) {
-      alert("Please upload or record an audio file first.");
+      alert("Please drag and drop or record an audio file first.");
       return;
     }
 
@@ -165,19 +179,9 @@ export default function App() {
     }
   };
 
-  // Image Recognition Handlers
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setImageFile(file);
-      setImageUrl(URL.createObjectURL(file));
-      setImageResult(null);
-    }
-  };
-
   const runImageAnalysis = async () => {
     if (!imageFile) {
-      alert("Please select an image file first.");
+      alert("Please select or drag an image file first.");
       return;
     }
 
@@ -216,19 +220,9 @@ export default function App() {
     }
   };
 
-  // Video Recognition Handlers
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
-      setVideoResult(null);
-    }
-  };
-
   const runVideoAnalysis = async () => {
     if (!videoFile) {
-      alert("Please select a video file first.");
+      alert("Please select or drag a video file first.");
       return;
     }
 
@@ -294,8 +288,7 @@ export default function App() {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const recordedFile = new File([audioBlob], 'live_recorded_voice.wav', { type: 'audio/wav' });
-        setAudioFile(recordedFile);
-        setAudioUrl(URL.createObjectURL(audioBlob));
+        processAudioFile(recordedFile);
       };
 
       mediaRecorderRef.current.start();
@@ -345,18 +338,391 @@ export default function App() {
     }
   };
 
+  // RENDER COMPONENT: Voice Recognition Block (Reused on Dashboard & Voice Page)
+  const renderVoiceSection = () => (
+    <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center font-bold shadow-md shadow-sky-500/20">
+            <Mic className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-extrabold text-sky-600 uppercase tracking-wider bg-sky-100 px-2 py-0.5 rounded border border-sky-200">1. Voice Module</span>
+            <h2 className="text-xl font-extrabold text-slate-900">Voice Recognition & Audio Deepfake Analysis</h2>
+          </div>
+        </div>
+        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-xs">
+          PyTorch Acoustic Spectral Model Active
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Audio Upload Dropzone with Drag & Drop */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Upload or Record Audio Clip:</h3>
+
+          {/* Click & Drag Dropzone */}
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsDragOverAudio(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragOverAudio(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOverAudio(false);
+              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                processAudioFile(e.dataTransfer.files[0]);
+              }
+            }}
+            className={`p-6 rounded-2xl border-2 border-dashed text-center transition-all cursor-pointer ${
+              isDragOverAudio 
+                ? 'border-sky-500 bg-sky-50 shadow-md scale-[1.01]' 
+                : 'border-slate-300 bg-white hover:border-sky-400 hover:bg-sky-50/40'
+            }`}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 mx-auto flex items-center justify-center mb-2">
+              <Upload className="w-6 h-6" />
+            </div>
+            <p className="text-xs font-bold text-slate-800">Click or Drag & Drop audio file here</p>
+            <p className="text-[10px] text-slate-500 mt-1">Supports WAV, MP3, M4A, OGG, WEBM</p>
+            
+            <input 
+              type="file" 
+              accept="audio/*" 
+              onChange={(e) => e.target.files?.[0] && processAudioFile(e.target.files[0])} 
+              className="hidden" 
+              id="audioFileInput"
+            />
+            <label 
+              htmlFor="audioFileInput" 
+              className="inline-block mt-3 px-4 py-1.5 bg-sky-500 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-sky-600 shadow-sm transition-all"
+            >
+              Browse Audio File
+            </label>
+          </div>
+
+          {/* Record Live Mic Button */}
+          <div className="flex justify-center">
+            {!isRecording ? (
+              <button onClick={startRecording} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-red-700 transition-all">
+                <Mic className="w-4 h-4" />
+                <span>Record Live Mic</span>
+              </button>
+            ) : (
+              <button onClick={stopRecording} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-900 transition-all">
+                <span>Stop Recording (00:{recordingTime < 10 ? `0${recordingTime}` : recordingTime})</span>
+              </button>
+            )}
+          </div>
+
+          {audioFile && (
+            <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-800 flex items-center justify-between">
+              <span>🎵 {audioFile.name} ({(audioFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+              <audio controls src={audioUrl || ''} className="h-8" />
+            </div>
+          )}
+
+          <button
+            onClick={runAudioAnalysis}
+            disabled={audioAnalyzing}
+            className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs rounded-xl shadow-md hover:scale-[1.01] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {audioAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+            <span>{audioAnalyzing ? "Analyzing Acoustic Signals..." : "Run Voice Deepfake Analysis"}</span>
+          </button>
+        </div>
+
+        {/* Audio Verdict Display */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Voice Recognition Verdict:</h3>
+
+          {audioResult ? (
+            <div className="space-y-3 text-xs">
+              <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200">
+                <span className="font-bold text-slate-700">Classification Outcome:</span>
+                <span className={`px-3 py-1 rounded-full font-extrabold uppercase text-[10px] ${
+                  audioResult.result === 'synthetic' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
+                }`}>
+                  {audioResult.result === 'synthetic' ? 'AI Deepfake Synthetic' : 'Authentic Human Voice'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 font-mono">
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans">Synthetic Probability</span>
+                  <span className="text-lg font-extrabold text-red-600">{Math.round(audioResult.synthetic_probability * 100)}%</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans">Real Probability</span>
+                  <span className="text-lg font-extrabold text-emerald-600">{Math.round(audioResult.real_probability * 100)}%</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-slate-700 leading-relaxed font-medium">
+                {audioResult.explanation}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 pt-4">Drag & drop or record an audio clip and click 'Run Voice Deepfake Analysis' to view acoustic spectral metrics.</p>
+          )}
+        </div>
+
+      </div>
+    </section>
+  );
+
+  // RENDER COMPONENT: Image Recognition Block (Reused on Dashboard & Image Page)
+  const renderImageSection = () => (
+    <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-500/20">
+            <ImageIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">2. Image Module</span>
+            <h2 className="text-xl font-extrabold text-slate-900">Image Recognition & YOLO Security Analysis</h2>
+          </div>
+        </div>
+        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-extrabold text-xs">
+          YOLO11 / YOLO26 Image Engine Active
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Image Upload Box with Click & Drag */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Select or Drag Image File (.JPG, .PNG, .WEBP):</h3>
+
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsDragOverImage(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragOverImage(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOverImage(false);
+              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                processImageFile(e.dataTransfer.files[0]);
+              }
+            }}
+            className={`relative rounded-2xl overflow-hidden aspect-video flex items-center justify-center border-2 border-dashed transition-all cursor-pointer ${
+              isDragOverImage 
+                ? 'border-indigo-500 bg-indigo-50 shadow-md scale-[1.01]' 
+                : 'border-slate-300 bg-white hover:border-indigo-400'
+            }`}
+          >
+            {imageUrl ? (
+              <div className="relative w-full h-full flex items-center justify-center">
+                <img src={imageUrl} alt="Uploaded preview" className="w-full h-full object-contain" />
+                
+                {imageResult && imageResult.objects && imageResult.objects.map((obj: any, idx: number) => (
+                  <div 
+                    key={idx}
+                    className="yolo-bbox"
+                    style={{
+                      left: `${(obj.bbox[0] / 10)}%`,
+                      top: `${(obj.bbox[1] / 7)}%`,
+                      width: `${((obj.bbox[2] - obj.bbox[0]) / 10)}%`,
+                      height: `${((obj.bbox[3] - obj.bbox[1]) / 7)}%`
+                    }}
+                  >
+                    <span className="yolo-bbox-label">
+                      {obj.label} ({Math.round(obj.confidence * 100)}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center space-y-2 p-6">
+                <ImageIcon className="w-10 h-10 text-indigo-500 mx-auto" />
+                <p className="text-xs font-bold text-slate-800">Click or Drag & Drop photo here</p>
+                <p className="text-[10px] text-slate-500">Supports JPG, PNG, WEBP</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <label className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-indigo-700 transition-all shadow-sm">
+              <Upload className="w-4 h-4" />
+              <span>Browse Photo</span>
+              <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && processImageFile(e.target.files[0])} className="hidden" />
+            </label>
+
+            <button
+              onClick={runImageAnalysis}
+              disabled={!imageFile || imageAnalyzing}
+              className="flex-1 py-2.5 bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {imageAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+              <span>{imageAnalyzing ? "Processing..." : "Run YOLO Image Scan"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Image Breakdown */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Image Recognition Breakdown:</h3>
+
+          {imageResult ? (
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 font-mono">
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-semibold">Objects Detected</span>
+                  <span className="text-lg font-extrabold text-slate-900">{imageResult.total_objects_detected}</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-semibold">Latency</span>
+                  <span className="text-lg font-extrabold text-indigo-600">{imageResult.processing_time_ms}ms</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-900 mb-1.5">Detected Object Classes:</h4>
+                <div className="space-y-1 font-mono">
+                  {Object.entries(imageResult.class_counts || {}).map(([cls, count]: any) => (
+                    <div key={cls} className="flex justify-between items-center p-2 rounded bg-white border border-slate-200">
+                      <span className="font-bold text-slate-800 capitalize">{cls}</span>
+                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-extrabold rounded-full text-[10px]">{count} found</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold">
+                {imageResult.threat_assessment}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 pt-4">Drag & drop an image and click 'Run YOLO Image Scan' to inspect object bounding boxes and category counts.</p>
+          )}
+        </div>
+
+      </div>
+    </section>
+  );
+
+  // RENDER COMPONENT: Video Recognition Block (Reused on Dashboard & Video Page)
+  const renderVideoSection = () => (
+    <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/20">
+            <Video className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider bg-blue-100 px-2 py-0.5 rounded border border-blue-200">3. Video Module</span>
+            <h2 className="text-xl font-extrabold text-slate-900">Video Recognition & Frame-by-Frame Computer Vision</h2>
+          </div>
+        </div>
+        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-extrabold text-xs">
+          YOLO11 / YOLO26 Video Frame Engine Active
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Video Upload Box with Click & Drag */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Select or Drag Video File (.MP4, .WEBM, .MOV):</h3>
+
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsDragOverVideo(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setIsDragOverVideo(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOverVideo(false);
+              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                processVideoFile(e.dataTransfer.files[0]);
+              }
+            }}
+            className={`relative rounded-2xl overflow-hidden aspect-video flex items-center justify-center border-2 border-dashed transition-all cursor-pointer ${
+              isDragOverVideo 
+                ? 'border-blue-500 bg-blue-50 shadow-md scale-[1.01]' 
+                : 'border-slate-300 bg-slate-900'
+            }`}
+          >
+            {videoUrl ? (
+              <video controls src={videoUrl} className="w-full h-full object-contain" />
+            ) : (
+              <div className="text-center space-y-2 p-6 text-white">
+                <Video className="w-10 h-10 text-blue-400 mx-auto" />
+                <p className="text-xs font-bold">Click or Drag & Drop video file here</p>
+                <p className="text-[10px] text-slate-400">Supports MP4, WEBM, MOV</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <label className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-blue-700 transition-all shadow-sm">
+              <Upload className="w-4 h-4" />
+              <span>Browse Video</span>
+              <input type="file" accept="video/*" onChange={(e) => e.target.files?.[0] && processVideoFile(e.target.files[0])} className="hidden" />
+            </label>
+
+            <button
+              onClick={runVideoAnalysis}
+              disabled={!videoFile || videoAnalyzing}
+              className="flex-1 py-2.5 bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {videoAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+              <span>{videoAnalyzing ? "Processing..." : "Run YOLO Video Scan"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Video Analytics */}
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <h3 className="text-sm font-extrabold text-slate-900">Video Recognition Timeline & Results:</h3>
+
+          {videoResult ? (
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 font-mono">
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-semibold">Total Frame Detections</span>
+                  <span className="text-lg font-extrabold text-slate-900">{videoResult.total_objects_detected}</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-semibold">Scan Latency</span>
+                  <span className="text-lg font-extrabold text-blue-600">{videoResult.processing_time_ms}ms</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-900 mb-1.5">Detected Object Classes:</h4>
+                <div className="space-y-1 font-mono">
+                  {Object.entries(videoResult.class_counts || {}).map(([cls, count]: any) => (
+                    <div key={cls} className="flex justify-between items-center p-2 rounded bg-white border border-slate-200">
+                      <span className="font-bold text-slate-800 capitalize">{cls}</span>
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-extrabold rounded-full text-[10px]">{count} found</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold">
+                {videoResult.threat_assessment}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 pt-4">Drag & drop a video file and click 'Run YOLO Video Scan' to execute frame-by-frame computer vision object detection.</p>
+          )}
+        </div>
+
+      </div>
+    </section>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-sky-500 selection:text-white flex">
       
       {/* ---------------------------------------------------- */}
-      {/* LEFT SIDEBAR NAVIGATION MENU (LIGHT THEME VERCEL-STYLE SIDEBAR) */}
+      {/* LEFT SIDEBAR NAVIGATION MENU (LIGHT THEME SIDEBAR) */}
       {/* ---------------------------------------------------- */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
         <div className="p-4 space-y-6">
           
-          {/* Top Organization Header */}
+          {/* Organization Header */}
           <div className="flex items-center justify-between">
             <div 
               onClick={() => setCurrentPage('dashboard')} 
@@ -381,7 +747,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* Quick Search Input */}
+          {/* Search Bar */}
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
             <input 
@@ -391,7 +757,7 @@ export default function App() {
             />
           </div>
 
-          {/* Main Sidebar Links List */}
+          {/* Main Sidebar Navigation Menu */}
           <div className="space-y-1">
             <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-3 block mb-1">
               Modules & Features
@@ -467,11 +833,11 @@ export default function App() {
       </aside>
 
       {/* ---------------------------------------------------- */}
-      {/* RIGHT MAIN CONTENT CONTAINER (SPANNING REST OF SCREEN) */}
+      {/* RIGHT MAIN CONTENT CONTAINER */}
       {/* ---------------------------------------------------- */}
       <div className="flex-1 md:ml-64 flex flex-col min-w-0">
         
-        {/* Top Navbar for Mobile Toggle & Header Actions */}
+        {/* Top Navbar */}
         <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-8 shadow-sm">
           <div className="flex items-center gap-3">
             <button 
@@ -493,16 +859,12 @@ export default function App() {
           </div>
         </header>
 
-        {/* PAGE CONTENT */}
+        {/* MAIN PAGE RENDER */}
         <main className="p-4 sm:p-8 flex-1 animate-fade-in">
 
-          {/* ==================================================== */}
-          {/* DASHBOARD OVERVIEW — CONTAINING VOICE, IMAGE, AND VIDEO IN SEQUENTIAL ORDER */}
-          {/* ==================================================== */}
+          {/* DASHBOARD PAGE (RENDER ALL THREE IN SEQUENTIAL ORDER: VOICE -> IMAGE -> VIDEO) */}
           {currentPage === 'dashboard' && (
             <div className="space-y-10">
-              
-              {/* Dashboard Light Banner */}
               <div className="rounded-3xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white p-8 shadow-xl shadow-sky-500/15 border border-sky-400/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div className="space-y-2 max-w-2xl">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white text-xs font-bold">
@@ -511,7 +873,7 @@ export default function App() {
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Voice, Image & Video AI Workstation</h1>
                   <p className="text-sky-100 text-xs font-medium leading-relaxed">
-                    Sequential analysis stack: 1. Voice Recognition Deepfake Scanner $\rightarrow$ 2. Image Recognition YOLO Engine $\rightarrow$ 3. Video Recognition Computer Vision Analyzer.
+                    Sequential analysis stack: 1. Voice Recognition Deepfake Scanner → 2. Image Recognition YOLO Engine → 3. Video Recognition Computer Vision Analyzer.
                   </p>
                 </div>
 
@@ -527,326 +889,46 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ---------------------------------------------------- */}
-              {/* SECTION 1: VOICE RECOGNITION (TOP SECTION) */}
-              {/* ---------------------------------------------------- */}
-              <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center font-bold shadow-md shadow-sky-500/20">
-                      <Mic className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-extrabold text-sky-600 uppercase tracking-wider bg-sky-100 px-2 py-0.5 rounded border border-sky-200">1. Top Section</span>
-                      <h2 className="text-xl font-extrabold text-slate-900">Voice Recognition & Audio Deepfake Analysis</h2>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Upload or Record Audio Clip:</h3>
-
-                    <div className="flex flex-wrap gap-3">
-                      <label className="flex items-center gap-2 px-4 py-2.5 bg-sky-500 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-sky-600 shadow-sm transition-all">
-                        <Upload className="w-4 h-4" />
-                        <span>Browse Audio File</span>
-                        <input type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" />
-                      </label>
-
-                      {!isRecording ? (
-                        <button onClick={startRecording} className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-red-700 transition-all">
-                          <Mic className="w-4 h-4" />
-                          <span>Record Live Mic</span>
-                        </button>
-                      ) : (
-                        <button onClick={stopRecording} className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-900 transition-all">
-                          <span>Stop Recording (00:{recordingTime < 10 ? `0${recordingTime}` : recordingTime})</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {audioFile && (
-                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-800 flex items-center justify-between">
-                        <span>🎵 {audioFile.name} ({(audioFile.size / 1024 / 1024).toFixed(2)} MB)</span>
-                        <audio controls src={audioUrl || ''} className="h-8" />
-                      </div>
-                    )}
-
-                    <button
-                      onClick={runAudioAnalysis}
-                      disabled={audioAnalyzing}
-                      className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs rounded-xl shadow-md hover:scale-[1.01] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {audioAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                      <span>{audioAnalyzing ? "Analyzing Acoustic Signals..." : "Run Voice Deepfake Analysis"}</span>
-                    </button>
-                  </div>
-
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Voice Recognition Verdict:</h3>
-
-                    {audioResult ? (
-                      <div className="space-y-3 text-xs">
-                        <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200">
-                          <span className="font-bold text-slate-700">Classification Outcome:</span>
-                          <span className={`px-3 py-1 rounded-full font-extrabold uppercase text-[10px] ${
-                            audioResult.result === 'synthetic' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
-                          }`}>
-                            {audioResult.result === 'synthetic' ? 'AI Deepfake Synthetic' : 'Authentic Human Voice'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 font-mono">
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans">Synthetic Probability</span>
-                            <span className="text-lg font-extrabold text-red-600">{Math.round(audioResult.synthetic_probability * 100)}%</span>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans">Real Probability</span>
-                            <span className="text-lg font-extrabold text-emerald-600">{Math.round(audioResult.real_probability * 100)}%</span>
-                          </div>
-                        </div>
-
-                        <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-slate-700 leading-relaxed font-medium">
-                          {audioResult.explanation}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 pt-4">Upload or record an audio clip and click 'Run Voice Deepfake Analysis' to view acoustic spectral metrics.</p>
-                    )}
-                  </div>
-
-                </div>
-              </section>
-
-              {/* ---------------------------------------------------- */}
-              {/* SECTION 2: IMAGE RECOGNITION (MIDDLE SECTION) */}
-              {/* ---------------------------------------------------- */}
-              <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-500/20">
-                      <ImageIcon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">2. Middle Section</span>
-                      <h2 className="text-xl font-extrabold text-slate-900">Image Recognition & YOLO Security Analysis</h2>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Select Image File (.JPG, .PNG, .WEBP):</h3>
-
-                    <div className="relative rounded-xl overflow-hidden bg-slate-100 aspect-video flex items-center justify-center border border-slate-200">
-                      {imageUrl ? (
-                        <div className="relative w-full h-full flex items-center justify-center">
-                          <img src={imageUrl} alt="Uploaded preview" className="w-full h-full object-contain" />
-                          
-                          {imageResult && imageResult.objects && imageResult.objects.map((obj: any, idx: number) => (
-                            <div 
-                              key={idx}
-                              className="yolo-bbox"
-                              style={{
-                                left: `${(obj.bbox[0] / 10)}%`,
-                                top: `${(obj.bbox[1] / 7)}%`,
-                                width: `${((obj.bbox[2] - obj.bbox[0]) / 10)}%`,
-                                height: `${((obj.bbox[3] - obj.bbox[1]) / 7)}%`
-                              }}
-                            >
-                              <span className="yolo-bbox-label">
-                                {obj.label} ({Math.round(obj.confidence * 100)}%)
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center space-y-2 p-6">
-                          <ImageIcon className="w-10 h-10 text-slate-400 mx-auto" />
-                          <p className="text-xs text-slate-500">No Image Uploaded</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-3">
-                      <label className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-indigo-700 transition-all shadow-sm">
-                        <Upload className="w-4 h-4" />
-                        <span>Browse Photo</span>
-                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                      </label>
-
-                      <button
-                        onClick={runImageAnalysis}
-                        disabled={!imageFile || imageAnalyzing}
-                        className="flex-1 py-2.5 bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {imageAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                        <span>{imageAnalyzing ? "Processing..." : "Run YOLO Image Scan"}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Image Recognition Breakdown:</h3>
-
-                    {imageResult ? (
-                      <div className="space-y-3 text-xs">
-                        <div className="grid grid-cols-2 gap-2 font-mono">
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans font-semibold">Objects Detected</span>
-                            <span className="text-lg font-extrabold text-slate-900">{imageResult.total_objects_detected}</span>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans font-semibold">Latency</span>
-                            <span className="text-lg font-extrabold text-indigo-600">{imageResult.processing_time_ms}ms</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-bold text-slate-900 mb-1.5">Detected Object Classes:</h4>
-                          <div className="space-y-1 font-mono">
-                            {Object.entries(imageResult.class_counts || {}).map(([cls, count]: any) => (
-                              <div key={cls} className="flex justify-between items-center p-2 rounded bg-white border border-slate-200">
-                                <span className="font-bold text-slate-800 capitalize">{cls}</span>
-                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-extrabold rounded-full text-[10px]">{count} found</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold">
-                          {imageResult.threat_assessment}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 pt-4">Upload an image and click 'Run YOLO Image Scan' to inspect object bounding boxes and category counts.</p>
-                    )}
-                  </div>
-
-                </div>
-              </section>
-
-              {/* ---------------------------------------------------- */}
-              {/* SECTION 3: VIDEO RECOGNITION (BOTTOM SECTION) */}
-              {/* ---------------------------------------------------- */}
-              <section className="glass-panel p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/20">
-                      <Video className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider bg-blue-100 px-2 py-0.5 rounded border border-blue-200">3. Bottom Section</span>
-                      <h2 className="text-xl font-extrabold text-slate-900">Video Recognition & Frame-by-Frame Computer Vision</h2>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Select Video File (.MP4, .WEBM, .MOV):</h3>
-
-                    <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-video flex items-center justify-center border border-slate-800 shadow-md">
-                      {videoUrl ? (
-                        <video controls src={videoUrl} className="w-full h-full object-contain" />
-                      ) : (
-                        <div className="text-center space-y-2 p-6">
-                          <Video className="w-10 h-10 text-slate-500 mx-auto" />
-                          <p className="text-xs text-slate-400">No Video Uploaded</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-3">
-                      <label className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white font-extrabold text-xs rounded-xl cursor-pointer hover:bg-blue-700 transition-all shadow-sm">
-                        <Upload className="w-4 h-4" />
-                        <span>Browse Video</span>
-                        <input type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-                      </label>
-
-                      <button
-                        onClick={runVideoAnalysis}
-                        disabled={!videoFile || videoAnalyzing}
-                        className="flex-1 py-2.5 bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {videoAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                        <span>{videoAnalyzing ? "Processing..." : "Run YOLO Video Scan"}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                    <h3 className="text-sm font-extrabold text-slate-900">Video Recognition Timeline & Results:</h3>
-
-                    {videoResult ? (
-                      <div className="space-y-3 text-xs">
-                        <div className="grid grid-cols-2 gap-2 font-mono">
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans font-semibold">Total Frame Detections</span>
-                            <span className="text-lg font-extrabold text-slate-900">{videoResult.total_objects_detected}</span>
-                          </div>
-                          <div className="p-3 bg-white rounded-xl border border-slate-200">
-                            <span className="text-[10px] text-slate-500 block font-sans font-semibold">Scan Latency</span>
-                            <span className="text-lg font-extrabold text-blue-600">{videoResult.processing_time_ms}ms</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-bold text-slate-900 mb-1.5">Detected Object Classes:</h4>
-                          <div className="space-y-1 font-mono">
-                            {Object.entries(videoResult.class_counts || {}).map(([cls, count]: any) => (
-                              <div key={cls} className="flex justify-between items-center p-2 rounded bg-white border border-slate-200">
-                                <span className="font-bold text-slate-800 capitalize">{cls}</span>
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 font-extrabold rounded-full text-[10px]">{count} found</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold">
-                          {videoResult.threat_assessment}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 pt-4">Upload a video and click 'Run YOLO Video Scan' to execute frame-by-frame computer vision object detection.</p>
-                    )}
-                  </div>
-
-                </div>
-              </section>
-
+              {renderVoiceSection()}
+              {renderImageSection()}
+              {renderVideoSection()}
             </div>
           )}
 
-          {/* INDIVIDUAL NAVIGATION PAGES */}
+          {/* DEDICATED INDIVIDUAL MODULE PAGES (NOT EMPTY) */}
           {currentPage === 'voice' && (
-            <div className="space-y-6 py-4 max-w-4xl mx-auto">
-              <h1 className="text-2xl font-extrabold text-slate-900">Voice Recognition Module</h1>
-              <p className="text-xs text-slate-600">Acoustic spectral MFCC analysis for neural speech synthesis detection.</p>
+            <div className="space-y-6 max-w-5xl mx-auto">
+              <div>
+                <h1 className="text-2xl font-extrabold text-slate-900">Voice Recognition Module</h1>
+                <p className="text-xs text-slate-600">Acoustic spectral MFCC analysis for neural speech synthesis detection.</p>
+              </div>
+              {renderVoiceSection()}
             </div>
           )}
 
           {currentPage === 'image' && (
-            <div className="space-y-6 py-4 max-w-4xl mx-auto">
-              <h1 className="text-2xl font-extrabold text-slate-900">Image Recognition Module (YOLO)</h1>
-              <p className="text-xs text-slate-600">Detect objects, personnel, and recording equipment in uploaded photos.</p>
+            <div className="space-y-6 max-w-5xl mx-auto">
+              <div>
+                <h1 className="text-2xl font-extrabold text-slate-900">Image Recognition Module (YOLO)</h1>
+                <p className="text-xs text-slate-600">Detect objects, personnel, and recording equipment in uploaded photos.</p>
+              </div>
+              {renderImageSection()}
             </div>
           )}
 
           {currentPage === 'video' && (
-            <div className="space-y-6 py-4 max-w-4xl mx-auto">
-              <h1 className="text-2xl font-extrabold text-slate-900">Video Recognition Module (YOLO)</h1>
-              <p className="text-xs text-slate-600">Frame-by-frame computer vision object recognition for video clips.</p>
+            <div className="space-y-6 max-w-5xl mx-auto">
+              <div>
+                <h1 className="text-2xl font-extrabold text-slate-900">Video Recognition Module (YOLO)</h1>
+                <p className="text-xs text-slate-600">Frame-by-frame computer vision object recognition for video clips.</p>
+              </div>
+              {renderVideoSection()}
             </div>
           )}
 
+          {/* SECURITY AUDIT LOGS */}
           {currentPage === 'history' && (
-            <div className="space-y-6 py-4 max-w-5xl mx-auto">
+            <div className="space-y-6 max-w-5xl mx-auto">
               <h1 className="text-2xl font-extrabold text-slate-900">Security Audit Logs</h1>
               <div className="glass-panel p-6 rounded-2xl bg-white border border-slate-200">
                 <table className="w-full text-left text-xs">
@@ -873,8 +955,9 @@ export default function App() {
             </div>
           )}
 
+          {/* IDENTITY VERIFY */}
           {currentPage === 'verify' && (
-            <div className="space-y-6 py-4 max-w-4xl mx-auto">
+            <div className="space-y-6 max-w-4xl mx-auto">
               <div className="glass-panel p-6 rounded-2xl space-y-4 bg-white border border-slate-200">
                 <h3 className="text-base font-extrabold text-slate-900">Vocal Identity Print Verification</h3>
                 <p className="text-xs text-slate-600">Compare reference and test audio samples to verify identity similarity.</p>
@@ -914,8 +997,9 @@ export default function App() {
             </div>
           )}
 
+          {/* MODEL HUB */}
           {currentPage === 'models' && (
-            <div className="space-y-6 py-4 max-w-4xl mx-auto">
+            <div className="space-y-6 max-w-4xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="glass-panel p-6 rounded-2xl bg-white border border-slate-200 space-y-2">
                   <h3 className="font-extrabold text-sky-600">Voice Acoustic Classifier</h3>

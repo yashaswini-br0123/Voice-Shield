@@ -3,7 +3,7 @@ import {
   Shield, Upload, Mic, RefreshCw, 
   MessageSquare, Globe, BarChart3, 
   UserCheck, Cpu, Activity, Video, Eye, Image as ImageIcon, Sparkles, CheckCircle,
-  Menu, X, Search
+  Menu, X, Search, Volume2, VolumeX
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -16,6 +16,10 @@ export default function App() {
   // Global State
   const [stats, setStats] = useState<any>(null);
   const [incidents, setIncidents] = useState<any[]>([]);
+
+  // Text-To-Speech (AI Voice Result Narration) State
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState<boolean>(true);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
 
   // Drag & Drop States
   const [isDragOverAudio, setIsDragOverAudio] = useState<boolean>(false);
@@ -59,6 +63,34 @@ export default function App() {
   const [chatInput, setChatInput] = useState<string>('');
   const [chatLoading, setChatLoading] = useState<boolean>(false);
 
+  // --- AI TEXT-TO-SPEECH VOICE NARRATION ENGINE ---
+  const speakText = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    if (!text || !isVoiceEnabled) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    // Auto-select a high quality natural English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const naturalVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural')));
+    if (naturalVoice) utterance.voice = naturalVoice;
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       const statsRes = await fetch(`${API_URL}/api/dashboard/stats`);
@@ -79,6 +111,10 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    // Warm up speech synthesis voices
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+    }
   }, []);
 
   // --- AUDIO PROCESSING HANDLERS ---
@@ -95,8 +131,11 @@ export default function App() {
     }
 
     setAudioAnalyzing(true);
+    stopSpeaking();
     const formData = new FormData();
     formData.append('audio', audioFile);
+
+    let outcome: any = null;
 
     try {
       const res = await fetch(`${API_URL}/api/detect`, {
@@ -105,24 +144,29 @@ export default function App() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setAudioResult(data);
+        outcome = await res.json();
       } else {
         throw new Error('API Error');
       }
     } catch {
       // Local fallback analysis if backend API is offline
-      setTimeout(() => {
-        setAudioResult({
-          result: audioFile.name.toLowerCase().includes('fake') ? 'synthetic' : 'authentic',
-          synthetic_probability: audioFile.name.toLowerCase().includes('fake') ? 0.93 : 0.12,
-          real_probability: audioFile.name.toLowerCase().includes('fake') ? 0.07 : 0.88,
-          risk_level: audioFile.name.toLowerCase().includes('fake') ? 'high' : 'low',
-          explanation: 'Acoustic spectral metrics computed. Pitch stability and MFCC harmonics evaluated.'
-        });
-      }, 700);
+      outcome = {
+        result: audioFile.name.toLowerCase().includes('fake') ? 'synthetic' : 'authentic',
+        synthetic_probability: audioFile.name.toLowerCase().includes('fake') ? 0.93 : 0.12,
+        real_probability: audioFile.name.toLowerCase().includes('fake') ? 0.07 : 0.88,
+        risk_level: audioFile.name.toLowerCase().includes('fake') ? 'high' : 'low',
+        explanation: 'Acoustic spectral metrics computed. Pitch stability and MFCC harmonics evaluated.'
+      };
     } finally {
+      setAudioResult(outcome);
       setAudioAnalyzing(false);
+
+      if (outcome) {
+        const speech = outcome.result === 'synthetic'
+          ? `Warning! AI Deepfake synthetic voice detected with ${Math.round(outcome.synthetic_probability * 100)} percent probability.`
+          : `Analysis complete. Authentic human voice detected with ${Math.round(outcome.real_probability * 100)} percent probability.`;
+        speakText(speech);
+      }
     }
   };
 
@@ -140,8 +184,11 @@ export default function App() {
     }
 
     setImageAnalyzing(true);
+    stopSpeaking();
     const formData = new FormData();
     formData.append('image', imageFile);
+
+    let outcome: any = null;
 
     try {
       const res = await fetch(`${API_URL}/api/image-detect`, {
@@ -150,28 +197,31 @@ export default function App() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setImageResult(data);
+        outcome = await res.json();
       } else {
         throw new Error('API Error');
       }
     } catch {
       // Local fallback image detection
-      setTimeout(() => {
-        setImageResult({
-          total_objects_detected: 3,
-          class_counts: { person: 2, laptop: 1 },
-          objects: [
-            { label: 'person', confidence: 0.95, bbox: [100, 50, 400, 500] },
-            { label: 'person', confidence: 0.91, bbox: [450, 80, 750, 520] },
-            { label: 'laptop', confidence: 0.88, bbox: [300, 350, 550, 550] }
-          ],
-          processing_time_ms: 18,
-          threat_assessment: 'Security Scan Clear: Standard office equipment & 2 authorized personnel detected.'
-        });
-      }, 600);
+      outcome = {
+        total_objects_detected: 3,
+        class_counts: { person: 2, laptop: 1 },
+        objects: [
+          { label: 'person', confidence: 0.95, bbox: [100, 50, 400, 500] },
+          { label: 'person', confidence: 0.91, bbox: [450, 80, 750, 520] },
+          { label: 'laptop', confidence: 0.88, bbox: [300, 350, 550, 550] }
+        ],
+        processing_time_ms: 18,
+        threat_assessment: 'Security Scan Clear: Standard office equipment & 2 authorized personnel detected.'
+      };
     } finally {
+      setImageResult(outcome);
       setImageAnalyzing(false);
+
+      if (outcome) {
+        const speech = `Image scan complete. ${outcome.total_objects_detected} objects detected. ${outcome.threat_assessment}`;
+        speakText(speech);
+      }
     }
   };
 
@@ -189,8 +239,11 @@ export default function App() {
     }
 
     setVideoAnalyzing(true);
+    stopSpeaking();
     const formData = new FormData();
     formData.append('video', videoFile);
+
+    let outcome: any = null;
 
     try {
       const res = await fetch(`${API_URL}/api/video-detect`, {
@@ -199,30 +252,34 @@ export default function App() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setVideoResult(data);
+        outcome = await res.json();
       } else {
         throw new Error('API Error');
       }
     } catch {
       // Local fallback video detection
-      setTimeout(() => {
-        setVideoResult({
-          total_objects_detected: 14,
-          class_counts: { person: 10, phone: 4 },
-          frames_analyzed: 45,
-          processing_time_ms: 140,
-          threat_assessment: 'Video Scan Complete: 10 people and 4 recording devices detected across sampled frames.'
-        });
-      }, 800);
+      outcome = {
+        total_objects_detected: 14,
+        class_counts: { person: 10, phone: 4 },
+        frames_analyzed: 45,
+        processing_time_ms: 140,
+        threat_assessment: 'Video Scan Complete: 10 people and 4 recording devices detected across sampled frames.'
+      };
     } finally {
+      setVideoResult(outcome);
       setVideoAnalyzing(false);
+
+      if (outcome) {
+        const speech = `Video frame scan complete. ${outcome.total_objects_detected} object instances detected. ${outcome.threat_assessment}`;
+        speakText(speech);
+      }
     }
   };
 
   // --- MIC RECORDING HANDLERS ---
   const startRecording = async () => {
     try {
+      stopSpeaking();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
@@ -267,6 +324,8 @@ export default function App() {
     setChatInput('');
     setChatLoading(true);
 
+    let replyText = '';
+
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
@@ -275,19 +334,16 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setChatMessages((prev) => [...prev, { sender: 'bot', text: data.reply }]);
+        replyText = data.reply;
       } else {
         throw new Error();
       }
     } catch {
-      setTimeout(() => {
-        setChatMessages((prev) => [...prev, { 
-          sender: 'bot', 
-          text: 'VoiceShield AI Assistant is active. Multi-modal AI models are configured for voice deepfake detection, YOLO image recognition, and video object analysis.' 
-        }]);
-      }, 500);
+      replyText = 'VoiceShield AI Assistant is active. Multi-modal AI models are configured for voice deepfake detection, YOLO image recognition, and video object analysis.';
     } finally {
+      setChatMessages((prev) => [...prev, { sender: 'bot', text: replyText }]);
       setChatLoading(false);
+      speakText(replyText);
     }
   };
 
@@ -386,7 +442,22 @@ export default function App() {
 
         {/* Audio Verdict Display */}
         <div className="p-6 rounded-2xl bg-emerald-50/40 border border-emerald-100 space-y-4">
-          <h3 className="text-sm font-extrabold text-slate-900">Voice Recognition Verdict:</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-slate-900">Voice Recognition Verdict:</h3>
+            {audioResult && (
+              <button 
+                onClick={() => speakText(
+                  audioResult.result === 'synthetic' 
+                    ? `Warning! AI Deepfake synthetic voice detected with ${Math.round(audioResult.synthetic_probability * 100)} percent probability.`
+                    : `Authentic human voice detected with ${Math.round(audioResult.real_probability * 100)} percent probability.`
+                )}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-extrabold rounded-lg transition-all"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Play AI Voice Verdict</span>
+              </button>
+            )}
+          </div>
 
           {audioResult ? (
             <div className="space-y-3 text-xs">
@@ -513,7 +584,18 @@ export default function App() {
 
         {/* Image Breakdown */}
         <div className="p-6 rounded-2xl bg-amber-50/40 border border-amber-100 space-y-4">
-          <h3 className="text-sm font-extrabold text-slate-900">Image Recognition Breakdown:</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-slate-900">Image Recognition Breakdown:</h3>
+            {imageResult && (
+              <button 
+                onClick={() => speakText(`Image scan result: ${imageResult.total_objects_detected} objects detected. ${imageResult.threat_assessment}`)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[11px] font-extrabold rounded-lg transition-all"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Play AI Voice Result</span>
+              </button>
+            )}
+          </div>
 
           {imageResult ? (
             <div className="space-y-3 text-xs">
@@ -624,7 +706,18 @@ export default function App() {
 
         {/* Video Analytics */}
         <div className="p-6 rounded-2xl bg-pink-50/40 border border-pink-100 space-y-4">
-          <h3 className="text-sm font-extrabold text-slate-900">Video Recognition Timeline & Results:</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-slate-900">Video Recognition Timeline & Results:</h3>
+            {videoResult && (
+              <button 
+                onClick={() => speakText(`Video frame scan result: ${videoResult.total_objects_detected} object instances detected. ${videoResult.threat_assessment}`)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-pink-200 hover:bg-pink-300 text-pink-950 text-[11px] font-extrabold rounded-lg transition-all"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Play AI Voice Result</span>
+              </button>
+            )}
+          </div>
 
           {videoResult ? (
             <div className="space-y-3 text-xs">
@@ -805,6 +898,27 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* AI Voice Toggle Button */}
+            <button 
+              onClick={() => {
+                if (isSpeaking) {
+                  stopSpeaking();
+                } else {
+                  setIsVoiceEnabled(!isVoiceEnabled);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all ${
+                isSpeaking 
+                  ? 'bg-pink-100 text-pink-800 border-pink-300 animate-pulse' 
+                  : isVoiceEnabled 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200' 
+                    : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}
+            >
+              {isVoiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-700" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
+              <span>{isSpeaking ? 'Speaking Result...' : isVoiceEnabled ? 'AI Voice: ON' : 'AI Voice: MUTED'}</span>
+            </button>
+
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold border border-emerald-200">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
               <span>Nodes Active</span>
@@ -934,8 +1048,10 @@ export default function App() {
                     }
                     setVerifying(true);
                     setTimeout(() => {
-                      setVerifyResult({ identity_match_score: 0.89, synthetic_risk: 'low' });
+                      const res = { identity_match_score: 0.89, synthetic_risk: 'low' };
+                      setVerifyResult(res);
                       setVerifying(false);
+                      speakText("Identity match verification score: 89 percent similarity. Impersonation risk low.");
                     }, 600);
                   }}
                   className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs rounded-xl shadow-md"
